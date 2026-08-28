@@ -9,40 +9,56 @@ window.onload = async () => {
 
     pages.forEach((page) => {
         files.push('/' + page + '?' + params);
-    })
+    });
 
     filesResponse.files.forEach((file) => {
         files.push('/' + file);
-    })
+    });
 
     const cacheName = 'fobywatel';
-
     const cache = await caches.open(cacheName);
-    await cache.addAll(files)
+
+    await cache.addAll(files);
 
     const cachedRequests = await cache.keys();
     
     cachedRequests.forEach((request) => {
         checkElement(request, cache);
-    })
+    });
 
     navigator.serviceWorker.register('/worker.js');
 }
 
 async function checkElement(request, cache) {
+
+    // 🚫 WAŻNE: NIE RUSZAJ CLOUDINARY — INACZEJ UPLOAD NIE DZIAŁA
+    if (
+        request.url.includes("cloudinary.com") ||
+        request.url.includes("api.cloudinary.com")
+    ) {
+        return; // całkowicie pomijamy cache i porównywanie
+    }
+
     const cachedResponse = await cache.match(request);
+    if (!cachedResponse) return;
 
     const url = new URL(request.url);
     const modifiedUrl = new URL(url);
 
-    modifiedUrl.searchParams.append('date', new Date());
+    // dodajemy parametr aby wymusić pobranie nowej wersji
+    modifiedUrl.searchParams.append('date', new Date().getTime());
 
-    const networkResponse = await fetch(modifiedUrl);
+    let networkResponse;
+    try {
+        networkResponse = await fetch(modifiedUrl);
+    } catch (e) {
+        return; // brak internetu — nie aktualizujemy
+    }
 
     const cachedText = await cachedResponse.clone().text();
     const networkText = await networkResponse.clone().text();
 
-    if (cachedText !== networkText){
+    if (cachedText !== networkText) {
         cache.put(url, networkResponse);
     }
 }
